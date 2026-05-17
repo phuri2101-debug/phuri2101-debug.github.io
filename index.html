@@ -30,7 +30,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .section-title{font-size:11px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
 .form-group{margin-bottom:10px}
 .form-group label{display:block;font-size:13px;color:#666;margin-bottom:4px}
-.form-group input,.form-group select{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:#fafafa}
+.form-group input,.form-group select,.form-group datalist{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:#fafafa}
 .form-group input:focus,.form-group select:focus{outline:none;border-color:#1a1a1a;background:#fff}
 .btn{width:100%;padding:12px;border-radius:10px;font-size:15px;font-weight:500;cursor:pointer;border:none;margin-top:4px}
 .btn-primary{background:#1a1a1a;color:#fff}
@@ -76,10 +76,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .select-item:active{background:#f5f5f5}
 .select-item-name{font-size:14px;font-weight:500}
 .select-item-meta{font-size:12px;color:#999;margin-top:2px}
-.loading{text-align:center;padding:20px;color:#999;font-size:14px}
+.loading{position:fixed;inset:0;background:rgba(255,255,255,.9);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.loading.hide{display:none}
+.spinner{width:40px;height:40px;border:3px solid #f0f0f0;border-top-color:#1a1a1a;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.price-note{font-size:12px;color:#999;margin-top:4px;font-style:italic}
 </style>
 </head>
 <body>
+
+<div class="loading" id="loading">
+  <div class="spinner"></div>
+  <div style="font-size:14px;color:#666">กำลังโหลดข้อมูล...</div>
+</div>
 
 <div class="header">
   <h1>ร้านสตาร์ไอทีโฟน</h1>
@@ -159,7 +168,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <input type="number" id="s-cost" placeholder="0" min="0">
     </div>
     <div class="form-group">
-      <label>ราคาขาย (฿)</label>
+      <label>ราคาขายปกติ (฿)</label>
       <input type="number" id="s-sell" placeholder="0" min="0">
     </div>
     <button class="btn btn-primary" onclick="addStock()">เพิ่มสินค้า</button>
@@ -177,9 +186,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <label>ประเภท</label>
       <select id="f-type" onchange="toggleFinType()">
         <option value="income">รายรับ (ขายสินค้า)</option>
-        <option value="expense">รายจ่าย (ค่าใช้จ่าย)</option>
+        <option value="expense">รายจ่าย</option>
       </select>
     </div>
+    
     <div id="f-income-fields">
       <div class="form-group">
         <label>เลือกสินค้า</label>
@@ -190,17 +200,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <label>จำนวนที่ขาย</label>
         <input type="number" id="f-qty" placeholder="1" min="1" value="1">
       </div>
+      <div class="form-group">
+        <label>ราคาขายจริง (฿/ชิ้น)</label>
+        <input type="number" id="f-actual-price" placeholder="0" min="0">
+        <div class="price-note">ใส่ราคาหลังลดให้ลูกค้า ถ้าไม่ลดใช้ราคาปกติ</div>
+      </div>
     </div>
+    
     <div id="f-expense-fields" style="display:none">
       <div class="form-group">
         <label>รายการ</label>
-        <input type="text" id="f-desc" placeholder="เช่น ค่าไฟ ค่าเช่า">
+        <input list="expense-options" id="f-desc" placeholder="พิมพ์หรือเลือกรายการ">
+        <datalist id="expense-options"></datalist>
       </div>
       <div class="form-group">
         <label>จำนวนเงิน (฿)</label>
         <input type="number" id="f-amount" placeholder="0" min="0">
       </div>
     </div>
+    
     <button class="btn btn-primary" onclick="addFinance()">บันทึก</button>
   </div>
   <div class="card">
@@ -224,21 +242,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyVyGGxi1JOT9iICaAdCkaqKLwfdH3EqViOKrWTE5RK9-K7lNnMP6rn0Y4jcr6s0QsB/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyFyGrGT73f8HiTRXddfpGY0GNfo9Gk-9l0GZeOq8O3xkwNNrmT86Io4MDy_iz6jZhD/exec';
 
 let stocks = [];
 let finances = [];
 let selectedStock = null;
-
-function save(){
-  localStorage.setItem('shop_stocks',JSON.stringify(stocks));
-  localStorage.setItem('shop_finances',JSON.stringify(finances));
-}
-
-function load(){
-  stocks = JSON.parse(localStorage.getItem('shop_stocks')||'[]');
-  finances = JSON.parse(localStorage.getItem('shop_finances')||'[]');
-}
 
 function today(){return new Date().toISOString().slice(0,10)}
 function fmt(n){return '฿'+Math.round(n).toLocaleString('th-TH')}
@@ -250,10 +258,38 @@ function setSyncStatus(state,msg){
   label.textContent = msg||'พร้อม';
 }
 
+async function loadFromSheets(){
+  document.getElementById('loading').classList.remove('hide');
+  try{
+    const [stockRes, finRes] = await Promise.all([
+      fetch(SCRIPT_URL+'?action=get_stocks').then(r=>r.json()),
+      fetch(SCRIPT_URL+'?action=get_finance&date='+today()).then(r=>r.json())
+    ]);
+    if(stockRes.status==='ok') stocks = stockRes.data||[];
+    if(finRes.status==='ok') finances = finRes.data||[];
+    
+    updateExpenseOptions();
+    renderAll();
+    setSyncStatus('ok','โหลดสำเร็จ');
+  }catch(e){
+    setSyncStatus('error','โหลดล้มเหลว');
+    alert('ไม่สามารถโหลดข้อมูลได้ กรุณาเช็คการเชื่อมต่ออินเทอร์เน็ต');
+  }finally{
+    document.getElementById('loading').classList.add('hide');
+  }
+}
+
+function updateExpenseOptions(){
+  const datalist = document.getElementById('expense-options');
+  const commonExpenses = ['ค่าไฟ','ค่าเช่า','ค่าน้ำ','ค่าอินเทอร์เน็ต','ค่าขนส่ง'];
+  const stockNames = stocks.map(s=>s.name+' (ซื้อเข้า)');
+  datalist.innerHTML = [...commonExpenses,...stockNames].map(opt=>`<option value="${opt}">`).join('');
+}
+
 async function syncToSheets(payload){
   setSyncStatus('syncing','กำลัง sync...');
   try{
-    const res = await fetch(SCRIPT_URL,{
+    await fetch(SCRIPT_URL,{
       method:'POST',
       mode:'no-cors',
       headers:{'Content-Type':'application/json'},
@@ -269,9 +305,13 @@ function switchTab(name){
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['dashboard','stock','finance'][i]===name));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
-  if(name==='dashboard') renderDashboard();
-  if(name==='stock') renderStock();
-  if(name==='finance') renderFinance();
+  renderAll();
+}
+
+function renderAll(){
+  renderDashboard();
+  renderStock();
+  renderFinance();
 }
 
 async function addStock(){
@@ -290,28 +330,30 @@ async function addStock(){
   const idx = stocks.findIndex(s=>s.name===name);
   if(idx>=0) stocks[idx]=item;
   else stocks.push(item);
-  save();
+  
+  updateExpenseOptions();
   renderStock();
   renderDashboard();
   ['s-name','s-qty','s-cost','s-sell'].forEach(id=>document.getElementById(id).value='');
   await syncToSheets({type:'stock',...item});
+  await loadFromSheets();
 }
 
 async function adjustQty(name,delta){
   const s = stocks.find(s=>s.name===name);
   if(s){
     s.qty = Math.max(0,s.qty+delta);
-    save();
     renderStock();
     renderDashboard();
     await syncToSheets({type:'stock',...s});
+    await loadFromSheets();
   }
 }
 
 function delStock(name){
   if(confirm('ลบ '+name+'?')){
     stocks = stocks.filter(s=>s.name!==name);
-    save();
+    updateExpenseOptions();
     renderStock();
     renderDashboard();
   }
@@ -359,7 +401,7 @@ function openStockPicker(){
     return;
   }
   list.innerHTML = stocks.map(s=>`
-    <div class="select-item" onclick="selectStock('${s.name}')">
+    <div class="select-item" onclick="selectStock('${s.name.replace(/'/g,"\\'")}')">
       <div class="select-item-name">${s.name}</div>
       <div class="select-item-meta">${s.cat} · คงเหลือ ${s.qty} · ขาย ${fmt(s.sellPrice)}</div>
     </div>
@@ -373,15 +415,20 @@ function closeStockPicker(){
 
 function selectStock(name){
   selectedStock = stocks.find(s=>s.name===name);
-  document.getElementById('selected-stock').textContent = `✓ ${selectedStock.name} (${fmt(selectedStock.sellPrice)})`;
+  document.getElementById('selected-stock').textContent = `✓ ${selectedStock.name} (ราคาปกติ ${fmt(selectedStock.sellPrice)})`;
+  document.getElementById('f-actual-price').value = selectedStock.sellPrice;
+  document.getElementById('f-actual-price').placeholder = selectedStock.sellPrice;
   closeStockPicker();
 }
 
 async function addFinance(){
   const type = document.getElementById('f-type').value;
+  
   if(type==='income'){
     if(!selectedStock) return alert('กรุณาเลือกสินค้าที่ขาย');
     const qty = parseInt(document.getElementById('f-qty').value)||1;
+    const actualPrice = parseFloat(document.getElementById('f-actual-price').value)||selectedStock.sellPrice;
+    
     if(selectedStock.qty < qty) return alert(`สินค้าคงเหลือไม่พอ (มีเพียง ${selectedStock.qty} ชิ้น)`);
     
     const entry = {
@@ -391,9 +438,10 @@ async function addFinance(){
       qty,
       costPrice: selectedStock.costPrice,
       sellPrice: selectedStock.sellPrice,
-      totalRevenue: selectedStock.sellPrice * qty,
+      actualPrice: actualPrice,
+      totalRevenue: actualPrice * qty,
       totalCost: selectedStock.costPrice * qty,
-      netProfit: (selectedStock.sellPrice - selectedStock.costPrice) * qty
+      netProfit: (actualPrice - selectedStock.costPrice) * qty
     };
     finances.push(entry);
     
@@ -401,12 +449,10 @@ async function addFinance(){
     const stockIdx = stocks.findIndex(s=>s.name===selectedStock.name);
     if(stockIdx>=0) stocks[stockIdx] = selectedStock;
     
-    save();
-    renderFinance();
-    renderDashboard();
-    renderStock();
+    renderAll();
     
     document.getElementById('f-qty').value='1';
+    document.getElementById('f-actual-price').value='';
     document.getElementById('selected-stock').textContent='';
     selectedStock = null;
     
@@ -417,9 +463,12 @@ async function addFinance(){
       qty: entry.qty,
       costPrice: entry.costPrice,
       sellPrice: entry.sellPrice,
+      actualPrice: entry.actualPrice,
       date: entry.date,
       stockName: entry.desc
     });
+    await loadFromSheets();
+    
   } else {
     const desc = document.getElementById('f-desc').value.trim();
     const amount = parseFloat(document.getElementById('f-amount').value)||0;
@@ -433,9 +482,7 @@ async function addFinance(){
       netProfit: -amount
     };
     finances.push(entry);
-    save();
-    renderFinance();
-    renderDashboard();
+    renderAll();
     
     document.getElementById('f-desc').value='';
     document.getElementById('f-amount').value='';
@@ -445,18 +492,11 @@ async function addFinance(){
       finType:'expense',
       desc,
       sellPrice: amount,
+      actualPrice: amount,
       date: entry.date,
       qty: 1
     });
-  }
-}
-
-function delFinance(idx){
-  if(confirm('ลบรายการนี้?')){
-    finances.splice(idx,1);
-    save();
-    renderFinance();
-    renderDashboard();
+    await loadFromSheets();
   }
 }
 
@@ -473,20 +513,18 @@ function renderFinance(){
   
   let netTotal = 0;
   el.innerHTML = tf.map((f,i)=>{
-    const realIdx = finances.indexOf(f);
     netTotal += f.netProfit||0;
     
     if(f.type==='income'){
+      const discount = f.sellPrice!==f.actualPrice ? ` (ลด ${fmt(f.sellPrice-f.actualPrice)})` : '';
       return `<div class="finance-item">
-        <span class="fi-desc">${f.desc} x${f.qty}</span>
+        <span class="fi-desc">${f.desc} x${f.qty}${discount}</span>
         <span class="fi-amount fi-income">+${fmt(f.totalRevenue||0)}</span>
-        <button class="del-btn" onclick="delFinance(${realIdx})">×</button>
       </div>`;
     } else {
       return `<div class="finance-item">
         <span class="fi-desc">${f.desc}</span>
         <span class="fi-amount fi-expense">-${fmt(f.amount||0)}</span>
-        <button class="del-btn" onclick="delFinance(${realIdx})">×</button>
       </div>`;
     }
   }).join('');
@@ -500,7 +538,6 @@ function renderFinance(){
 function renderDashboard(){
   const tf = finances.filter(f=>f.date===today());
   const incomeItems = tf.filter(f=>f.type==='income');
-  const expenseItems = tf.filter(f=>f.type==='expense');
   
   const netProfit = tf.reduce((sum,f)=>(sum+(f.netProfit||0)),0);
   
@@ -514,7 +551,7 @@ function renderDashboard(){
   document.getElementById('d-low').textContent = low.length;
   
   const thisMonth = today().slice(0,7);
-  const monthIncome = finances.filter(f=>f.date.startsWith(thisMonth)&&f.type==='income').reduce((sum,f)=>(sum+(f.totalRevenue||0)),0);
+  const monthIncome = finances.filter(f=>f.date&&f.date.startsWith(thisMonth)&&f.type==='income').reduce((sum,f)=>(sum+(f.totalRevenue||0)),0);
   document.getElementById('d-month').textContent = fmt(monthIncome);
   
   const ll = document.getElementById('d-low-list');
@@ -550,11 +587,7 @@ function renderDashboard(){
   `).join('');
 }
 
-load();
-renderDashboard();
-renderStock();
-renderFinance();
-setSyncStatus('ok','พร้อม');
+loadFromSheets();
 </script>
 </body>
 </html>
