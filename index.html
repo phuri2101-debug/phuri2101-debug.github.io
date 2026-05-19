@@ -281,8 +281,25 @@ async function post(payload){
   setSync('spin','กำลัง sync…');
   try{
     await fetch(URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    await load();
+    // retry โหลดซ้ำสูงสุด 5 รอบ จนกว่าข้อมูลจะเปลี่ยน
+    await loadWithRetry(payload);
   }catch(e){setSync('err','offline');}
+}
+
+async function loadWithRetry(payload){
+  const prevFinCount = finances.length;
+  const prevStockSnap = JSON.stringify(stocks.map(s=>s.qty));
+  for(let i=0;i<5;i++){
+    await new Promise(r=>setTimeout(r,1200));
+    await load();
+    const changed =
+      finances.length !== prevFinCount ||
+      JSON.stringify(stocks.map(s=>s.qty)) !== prevStockSnap;
+    if(changed) return;
+  }
+  // โหลดครั้งสุดท้ายอีกรอบเผื่อ
+  await new Promise(r=>setTimeout(r,2000));
+  await load();
 }
 
 function buildCatOptions(){
