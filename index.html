@@ -245,13 +245,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <script>
-const URL = 'https://script.google.com/macros/s/AKfycbzRhfdpmgknXnqtHhTda79ah68McN1-jlsQ2UrkG_oFLr6nlbe4L1DWwKKgByUbPYM/exec';
+const URL = 'https://script.google.com/macros/s/AKfycbxb4iVDvaOeuF2OYsbbLPfmRhO0_1O2CwSKwLjzoaJd2EaY9r7OhFBIRjjDBBEH_zcU/exec';
 
 let stocks=[], finances=[], pickerMode='income', selectedIncome=null, selectedBuy=null;
 
 const CATS=['มือถือ Samsung','มือถือ iPhone','มือถือแบรนด์อื่น','อุปกรณ์เสริม','ซิม / แพ็กเกจ','อื่นๆ'];
 
-function today(){return new Date().toISOString().slice(0,10)}
+function today(){
+  // ใช้ timezone ไทย UTC+7 เสมอ
+  const d=new Date(Date.now()+7*60*60*1000);
+  return d.toISOString().slice(0,10);
+}
 function fmt(n){return '฿'+Math.round(n).toLocaleString('th-TH')}
 function setSync(s,msg){
   document.getElementById('dot').className='dot'+(s==='spin'?' spin':s==='err'?' err':'');
@@ -471,9 +475,11 @@ async function delFin(rowIndex){
 function renderFin(){
   const el=document.getElementById('fin-list');
   const sm=document.getElementById('fin-summary');
-  if(!finances.length){el.innerHTML='<p class="empty">ยังไม่มีรายการ</p>';sm.style.display='none';return;}
+  // filter เฉพาะวันนี้เสมอ ป้องกัน timezone คลาดเคลื่อน
+  const todayFin=finances.filter(f=>f.date===today());
+  if(!todayFin.length){el.innerHTML='<p class="empty">ยังไม่มีรายการ</p>';sm.style.display='none';return;}
   let net=0;
-  el.innerHTML=finances.map(f=>{
+  el.innerHTML=todayFin.map(f=>{
     const np=Number(f.netProfit)||0; net+=np;
     let cls='income',sign='+',amt='';
     if(f.type==='รายรับ'){amt=fmt(Number(f.totalRevenue)||0);}
