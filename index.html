@@ -43,6 +43,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .btn-dark{background:#1a1a1a;color:#fff}
 .btn-gray{background:#f0f0f0;color:#1a1a1a;margin-top:8px}
 .btn:active{opacity:.7}
+  .sel-income{background:#EAF3DE;color:#3B6D11;border-color:#3B6D11}
+.sel-buy{background:#E6F1FB;color:#185FA5;border-color:#185FA5}
+.sel-expense{background:#FCEBEB;color:#A32D2D;border-color:#A32D2D}
 /* ── badges ── */
 .badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:500}
 .ok{background:#EAF3DE;color:#3B6D11}
@@ -382,6 +385,11 @@ function onFinType(){
   document.getElementById('f-income').style.display=v==='income'?'block':'none';
   document.getElementById('f-buy').style.display=v==='buy_stock'?'block':'none';
   document.getElementById('f-exp').style.display=v==='expense'?'block':'none';
+  const sel=document.getElementById('f-type');
+  sel.className='';
+  if(v==='income') sel.classList.add('sel-income');
+  else if(v==='buy_stock') sel.classList.add('sel-buy');
+  else sel.classList.add('sel-expense');
 }
 
 function filterStockPicker(mode){
@@ -546,7 +554,8 @@ function renderDash(){
       <div class="bar-track"><div class="bar-fill" style="width:${Math.round(d.v/mx*100)}%"></div></div>
     </div>`).join('');
 }
-
+  
+onFinType();
 load();
 </script>
 </body>
