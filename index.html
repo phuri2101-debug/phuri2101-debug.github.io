@@ -43,9 +43,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .btn-dark{background:#1a1a1a;color:#fff}
 .btn-gray{background:#f0f0f0;color:#1a1a1a;margin-top:8px}
 .btn:active{opacity:.7}
-  .sel-income{background:#EAF3DE;color:#3B6D11;border-color:#3B6D11}
-.sel-buy{background:#E6F1FB;color:#185FA5;border-color:#185FA5}
-.sel-expense{background:#FCEBEB;color:#A32D2D;border-color:#A32D2D}
 /* ── badges ── */
 .badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:500}
 .ok{background:#EAF3DE;color:#3B6D11}
@@ -180,18 +177,40 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
     <!-- income -->
     <div id="f-income">
-      <div class="fg"><label>หมวดหมู่</label>
-        <select id="f-inc-cat" onchange="filterStockPicker('income')">
-          <option value="">— ทุกหมวด —</option>
+      <div class="fg"><label>วิธีบันทึก</label>
+        <select id="f-inc-mode" onchange="onIncMode()">
+          <option value="stock">เลือกจาก Stock</option>
+          <option value="manual">กรอกเอง (งานซ่อม / อื่นๆ)</option>
         </select>
       </div>
-      <div class="fg"><label>สินค้าที่ขาย</label>
-        <button class="btn btn-gray" onclick="openPicker('income')">เลือกสินค้า</button>
-        <div id="f-inc-sel" style="margin-top:8px;font-size:13px;color:#666"></div>
+
+      <!-- เลือกจาก stock -->
+      <div id="f-inc-from-stock">
+        <div class="fg"><label>หมวดหมู่</label>
+          <select id="f-inc-cat" onchange="filterStockPicker('income')">
+            <option value="">— ทุกหมวด —</option>
+          </select>
+        </div>
+        <div class="fg"><label>สินค้าที่ขาย</label>
+          <button class="btn btn-gray" onclick="openPicker('income')">เลือกสินค้า</button>
+          <div id="f-inc-sel" style="margin-top:8px;font-size:13px;color:#666"></div>
+        </div>
       </div>
+
+      <!-- กรอกเอง -->
+      <div id="f-inc-manual" style="display:none">
+        <div class="fg"><label>ชื่อรายการ</label>
+          <input id="f-inc-manual-desc" type="text" placeholder="เช่น ซ่อมจอ Samsung A15 / ขายเคส">
+        </div>
+        <div class="fg"><label>ราคาทุน (฿)</label>
+          <input id="f-inc-manual-cost" type="number" min="0" placeholder="0">
+          <div class="hint">ใส่ 0 ถ้าไม่มีต้นทุน</div>
+        </div>
+      </div>
+
       <div class="fg"><label>จำนวนที่ขาย (ชิ้น)</label><input id="f-inc-qty" type="number" min="1" value="1"></div>
       <div class="fg"><label>ราคาขายจริง (฿/ชิ้น)</label>
-        <input id="f-inc-price" type="number" min="0" placeholder="ใส่ราคาหลังลด (ถ้าลด)">
+        <input id="f-inc-price" type="number" min="0" placeholder="ใส่ราคาที่ขาย">
         <div class="hint">ถ้าไม่ลดราคา ปล่อยว่างไว้ได้เลย</div>
       </div>
     </div>
@@ -248,9 +267,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <script>
-const URL = 'https://script.google.com/macros/s/AKfycbxb4iVDvaOeuF2OYsbbLPfmRhO0_1O2CwSKwLjzoaJd2EaY9r7OhFBIRjjDBBEH_zcU/exec';
+const URL = 'https://script.google.com/macros/s/AKfycbwf9xWnJ89f1TvXRBI0_Tl8qjpZY_zpkR6tim2_vqdUND18QAA8zwr3GSLM6pgcGqdQ/exec';
 
-let stocks=[], finances=[], pickerMode='income', selectedIncome=null, selectedBuy=null;
+let stocks=[], finances=[], finMonth=[], pickerMode='income', selectedIncome=null, selectedBuy=null;
 
 const CATS=['มือถือ Samsung','มือถือ iPhone','มือถือแบรนด์อื่น','อุปกรณ์เสริม','ซิม / แพ็กเกจ','อื่นๆ'];
 
@@ -268,12 +287,15 @@ function setSync(s,msg){
 async function load(){
   document.getElementById('loading').classList.remove('hide');
   try{
-    const [sr,fr]=await Promise.all([
+    const mo=today().slice(0,7);
+    const [sr,fr,fm]=await Promise.all([
       fetch(URL+'?action=get_stocks').then(r=>r.json()),
-      fetch(URL+'?action=get_finance&date='+today()).then(r=>r.json())
+      fetch(URL+'?action=get_finance&date='+today()).then(r=>r.json()),
+      fetch(URL+'?action=get_finance&month='+mo).then(r=>r.json())
     ]);
     if(sr.status==='ok') stocks=sr.data||[];
     if(fr.status==='ok') finances=fr.data||[];
+    if(fm.status==='ok') finMonth=fm.data||[];
     buildCatOptions();
     renderAll();
     setSync('ok','โหลดสำเร็จ');
@@ -380,16 +402,22 @@ async function adjStock(name,delta){
 }
 
 /* ── FINANCE UI ── */
+function onIncMode(){
+  const v=document.getElementById('f-inc-mode').value;
+  document.getElementById('f-inc-from-stock').style.display=v==='stock'?'block':'none';
+  document.getElementById('f-inc-manual').style.display=v==='manual'?'block':'none';
+  if(v==='manual'){
+    selectedIncome=null;
+    document.getElementById('f-inc-sel').textContent='';
+    document.getElementById('f-inc-price').placeholder='ใส่ราคาที่ขาย';
+  }
+}
+
 function onFinType(){
   const v=document.getElementById('f-type').value;
   document.getElementById('f-income').style.display=v==='income'?'block':'none';
   document.getElementById('f-buy').style.display=v==='buy_stock'?'block':'none';
   document.getElementById('f-exp').style.display=v==='expense'?'block':'none';
-  const sel=document.getElementById('f-type');
-  sel.className='';
-  if(v==='income') sel.classList.add('sel-income');
-  else if(v==='buy_stock') sel.classList.add('sel-buy');
-  else sel.classList.add('sel-expense');
 }
 
 function filterStockPicker(mode){
@@ -400,7 +428,9 @@ function openPicker(mode){
   pickerMode=mode;
   const catId=mode==='income'?'f-inc-cat':'f-buy-cat';
   const cat=document.getElementById(catId).value;
-  const items=cat?stocks.filter(s=>s.cat===cat):stocks;
+  // กรองสินค้าหมด stock ออกเฉพาะตอนขาย
+  const available = mode==='income' ? stocks.filter(s=>s.qty>0) : stocks;
+  const items=cat?available.filter(s=>s.cat===cat):available;
   document.getElementById('picker-title').textContent=mode==='income'?'เลือกสินค้าที่ขาย':'เลือกสินค้าที่ซื้อเข้า';
   if(!items.length){alert('ไม่มีสินค้าในหมวดนี้');return;}
 
@@ -440,16 +470,33 @@ async function saveFinance(){
   const type=document.getElementById('f-type').value;
 
   if(type==='income'){
-    if(!selectedIncome)return alert('กรุณาเลือกสินค้าที่ขาย');
+    const mode=document.getElementById('f-inc-mode').value;
     const qty=+document.getElementById('f-inc-qty').value||1;
-    const actual=+document.getElementById('f-inc-price').value||selectedIncome.sellPrice;
-    if(selectedIncome.qty<qty)return alert('Stock ไม่พอ (เหลือ '+selectedIncome.qty+' ชิ้น)');
-    await post({type:'finance',finType:'income',stockName:selectedIncome.name,
-      desc:selectedIncome.name,cat:selectedIncome.cat,qty,
-      costPrice:selectedIncome.costPrice,sellPrice:selectedIncome.sellPrice,
-      actualPrice:actual,date:today()});
-    selectedIncome=null;
-    document.getElementById('f-inc-sel').textContent='';
+    const actual=+document.getElementById('f-inc-price').value;
+
+    if(mode==='stock'){
+      if(!selectedIncome)return alert('กรุณาเลือกสินค้าที่ขาย');
+      if(!actual&&actual!==0)return alert('กรุณากรอกราคาขายจริง');
+      const finalPrice=actual||selectedIncome.sellPrice;
+      if(selectedIncome.qty<qty)return alert('Stock ไม่พอ (เหลือ '+selectedIncome.qty+' ชิ้น)');
+      await post({type:'finance',finType:'income',stockName:selectedIncome.name,
+        desc:selectedIncome.name,cat:selectedIncome.cat,qty,
+        costPrice:selectedIncome.costPrice,sellPrice:selectedIncome.sellPrice,
+        actualPrice:finalPrice,date:today()});
+      selectedIncome=null;
+      document.getElementById('f-inc-sel').textContent='';
+    } else {
+      // กรอกเอง
+      const desc=document.getElementById('f-inc-manual-desc').value.trim();
+      const cost=+document.getElementById('f-inc-manual-cost').value||0;
+      if(!desc)return alert('กรุณากรอกชื่อรายการ');
+      if(!actual)return alert('กรุณากรอกราคาขาย');
+      await post({type:'finance',finType:'income',
+        desc,cat:'รายรับอื่นๆ',qty,
+        costPrice:cost,sellPrice:actual,actualPrice:actual,date:today()});
+      document.getElementById('f-inc-manual-desc').value='';
+      document.getElementById('f-inc-manual-cost').value='';
+    }
     document.getElementById('f-inc-qty').value='1';
     document.getElementById('f-inc-price').value='';
 
@@ -519,20 +566,19 @@ function renderDash(){
   document.getElementById('d-sales').textContent=tf.filter(f=>f.type==='รายรับ').length;
   const low=stocks.filter(s=>s.qty<=s.min);
   document.getElementById('d-low').textContent=low.length;
-  const mo=today().slice(0,7);
-  const mInc=finances.filter(f=>f.date&&f.date.startsWith(mo)&&f.type==='รายรับ')
+  const mInc=finMonth.filter(f=>f.type==='รายรับ')
     .reduce((s,f)=>s+(Number(f.totalRevenue)||0),0);
   document.getElementById('d-month').textContent=fmt(mInc);
 
-  // สินค้าขายดี
+  // สินค้าขายดีเดือนนี้ (ใช้ finMonth)
   const cnt={};
-  finances.filter(f=>f.type==='รายรับ').forEach(f=>{cnt[f.desc]=(cnt[f.desc]||0)+(Number(f.qty)||1);});
+  finMonth.filter(f=>f.type==='รายรับ').forEach(f=>{cnt[f.desc]=(cnt[f.desc]||0)+(Number(f.qty)||1);});
   const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,3);
   document.getElementById('d-top').innerHTML=top.length?top.map(([n,q],i)=>`
     <div class="low-row">
       <div><span style="font-size:14px;font-weight:500">${['🥇','🥈','🥉'][i]} ${n}</span></div>
       <span style="font-size:13px;color:#666">ขายไป ${q} ชิ้น</span>
-    </div>`).join(''):'<p class="empty">ยังไม่มีข้อมูล</p>';
+    </div>`).join(''):'<p class="empty">ยังไม่มีข้อมูลเดือนนี้</p>';
 
   // ใกล้หมด
   document.getElementById('d-low-list').innerHTML=low.length?low.map(s=>`
@@ -541,21 +587,22 @@ function renderDash(){
       <span class="badge ${s.qty===0?'out':'low'}">เหลือ ${s.qty}</span>
     </div>`).join(''):'<p class="empty">สินค้าครบทุกรายการ ✓</p>';
 
-  // 7 วัน
+  // 7 วันล่าสุด — ใช้ timezone ไทย
   const days=[];
-  for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);
+  for(let i=6;i>=0;i--){
+    const d=new Date(Date.now()+7*60*60*1000);
+    d.setDate(d.getDate()-i);
     const ds=d.toISOString().slice(0,10);
-    const inc=finances.filter(f=>f.date===ds&&f.type==='รายรับ').reduce((s,f)=>s+(Number(f.totalRevenue)||0),0);
-    days.push({l:['อา','จ','อ','พ','พฤ','ศ','ส'][d.getDay()],v:inc});}
+    const inc=finMonth.filter(f=>f.date===ds&&f.type==='รายรับ').reduce((s,f)=>s+(Number(f.totalRevenue)||0),0);
+    days.push({l:['อา','จ','อ','พ','พฤ','ศ','ส'][new Date(ds).getDay()],v:inc,ds});}
   const mx=Math.max(...days.map(d=>d.v),1);
   document.getElementById('d-bars').innerHTML=days.map(d=>`
     <div class="bar-row">
-      <div class="bar-top"><span>${d.l}</span><span>${d.v>0?fmt(d.v):'-'}</span></div>
-      <div class="bar-track"><div class="bar-fill" style="width:${Math.round(d.v/mx*100)}%"></div></div>
+      <div class="bar-top"><span>${d.l}${d.ds===today()?'<span style="font-size:10px;color:#1a1a1a;font-weight:600"> วันนี้</span>':''}</span><span>${d.v>0?fmt(d.v):'-'}</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.round(d.v/mx*100)}%;${d.ds===today()?'background:#3B6D11':''}""></div></div>
     </div>`).join('');
 }
-  
-onFinType();
+
 load();
 </script>
 </body>
